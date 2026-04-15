@@ -15,10 +15,16 @@ import time
 from kafka import KafkaConsumer
 from kafka.errors import NoBrokersAvailable
 
-from config import REDIS_HOST, REDIS_PORT
-from features import FeatureEngine
-from online_store import OnlineFeatureStore
-from offline_store import OfflineFeatureStore
+try:
+    from feature_store.config import REDIS_HOST, REDIS_PORT
+    from feature_store.features import FeatureEngine
+    from feature_store.online_store import OnlineFeatureStore
+    from feature_store.offline_store import OfflineFeatureStore
+except ImportError:
+    from config import REDIS_HOST, REDIS_PORT
+    from features import FeatureEngine
+    from online_store import OnlineFeatureStore
+    from offline_store import OfflineFeatureStore
 
 # Kafka
 import os

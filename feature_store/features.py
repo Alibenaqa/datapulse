@@ -9,7 +9,10 @@ from collections import deque
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
-from config import WINDOW_SHORT, WINDOW_LONG, PRICE_BUFFER_SIZE
+try:
+    from feature_store.config import WINDOW_SHORT, WINDOW_LONG, PRICE_BUFFER_SIZE
+except ImportError:
+    from config import WINDOW_SHORT, WINDOW_LONG, PRICE_BUFFER_SIZE
 
 
 @dataclass

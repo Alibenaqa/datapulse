@@ -6,3 +6,7 @@ python-dotenv==1.0.1
 redis==5.0.4
 duckdb==0.10.3
 pandas==2.2.2
+
+# Session 3 — ML pipeline
+scikit-learn>=1.5
+mlflow>=2.13

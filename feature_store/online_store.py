@@ -13,8 +13,12 @@ import logging
 
 import redis
 
-from config import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_FEATURE_TTL
-from features import FeatureVector
+try:
+    from feature_store.config import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_FEATURE_TTL
+    from feature_store.features import FeatureVector
+except ImportError:
+    from config import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_FEATURE_TTL
+    from features import FeatureVector
 
 logger = logging.getLogger(__name__)
 

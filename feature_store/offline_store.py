@@ -15,8 +15,12 @@ from pathlib import Path
 
 import duckdb
 
-from config import DUCKDB_PATH
-from features import FeatureVector
+try:
+    from feature_store.config import DUCKDB_PATH
+    from feature_store.features import FeatureVector
+except ImportError:
+    from config import DUCKDB_PATH
+    from features import FeatureVector
 
 logger = logging.getLogger(__name__)
 
