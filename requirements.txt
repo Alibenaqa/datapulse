@@ -1,0 +1,8 @@
+# Session 1 — Kafka ingestion
+kafka-python-ng==2.2.3
+python-dotenv==1.0.1
+
+# Session 2 — Feature store
+redis==5.0.4
+duckdb==0.10.3
+pandas==2.2.2
