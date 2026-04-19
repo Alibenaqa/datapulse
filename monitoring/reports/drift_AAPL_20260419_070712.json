@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-04-19T07:07:12.100182+00:00",
+  "symbol": "AAPL",
+  "dataset_drift": true,
+  "drift_share": 1.0,
+  "n_features_drifted": 4,
+  "n_features_total": 4,
+  "reference_size": 200,
+  "current_size": 100,
+  "features": {
+    "sma_5": {
+      "drifted": true,
+      "p_value": 0.0,
+      "stattest": "K-S p_value"
+    },
+    "sma_20": {
+      "drifted": true,
+      "p_value": 0.0,
+      "stattest": "K-S p_value"
+    },
+    "volatility_20": {
+      "drifted": true,
+      "p_value": 0.0,
+      "stattest": "K-S p_value"
+    },
+    "price_change_pct": {
+      "drifted": true,
+      "p_value": 0.0,
+      "stattest": "K-S p_value"
+    }
+  }
+}
