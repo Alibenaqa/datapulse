@@ -47,3 +47,10 @@ class HealthResponse(BaseModel):
     model_production: bool
     model_staging: bool
     redis_online: bool
+
+
+class InsightResponse(BaseModel):
+    """Réponse de l'analyse IA des alertes de drift."""
+    symbol: Optional[str]
+    n_alerts_analyzed: int
+    insight: str

@@ -18,3 +18,6 @@ httpx==0.27.0
 
 # Session 5 — Monitoring
 evidently==0.4.30
+
+# Session 6 — LLM layer
+anthropic>=0.40.0

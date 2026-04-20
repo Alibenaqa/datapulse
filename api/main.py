@@ -22,6 +22,7 @@ from api.schemas import (
     PredictResponse,
     ABTestResponse,
     HealthResponse,
+    InsightResponse,
 )
 
 logging.basicConfig(
@@ -179,4 +180,72 @@ def ab_test(symbol: str):
         production=prod_pred,
         staging=staging_pred,
         agreement=staging_pred is not None and prod_pred.direction == staging_pred.direction,
+    )
+
+
+@app.get("/insights/{symbol}", response_model=InsightResponse, tags=["LLM"])
+def insights_symbol(symbol: str):
+    """
+    Analyse IA des alertes de drift pour un symbole via Claude.
+
+    Utilise RAG (Retrieval-Augmented Generation) : récupère les alertes
+    du monitoring et demande à Claude de les analyser en langage naturel.
+
+    Prérequis : variable d'environnement ANTHROPIC_API_KEY définie.
+    """
+    try:
+        from llm.analyzer import analyze_drift_full
+        from llm.rag import load_alerts
+    except ImportError:
+        raise HTTPException(503, "Module LLM non disponible.")
+
+    sym = symbol.upper()
+    alerts = load_alerts(symbol=sym)
+
+    if not alerts:
+        raise HTTPException(
+            404,
+            f"Aucune alerte trouvée pour {sym}. Lance d'abord : python monitoring/run.py",
+        )
+
+    try:
+        insight = analyze_drift_full(sym)
+    except ValueError as e:
+        raise HTTPException(503, str(e))
+
+    return InsightResponse(
+        symbol=sym,
+        n_alerts_analyzed=len(alerts),
+        insight=insight,
+    )
+
+
+@app.get("/insights", response_model=InsightResponse, tags=["LLM"])
+def insights_all():
+    """
+    Analyse IA globale de toutes les alertes de drift (tous les symboles).
+    """
+    try:
+        from llm.analyzer import analyze_drift_full
+        from llm.rag import load_alerts
+    except ImportError:
+        raise HTTPException(503, "Module LLM non disponible.")
+
+    alerts = load_alerts()
+
+    if not alerts:
+        raise HTTPException(
+            404,
+            "Aucune alerte trouvée. Lance d'abord : python monitoring/run.py",
+        )
+
+    try:
+        insight = analyze_drift_full(symbol=None)
+    except ValueError as e:
+        raise HTTPException(503, str(e))
+
+    return InsightResponse(
+        symbol=None,
+        n_alerts_analyzed=len(alerts),
+        insight=insight,
     )

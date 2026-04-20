@@ -13,8 +13,10 @@
 5. [Session 2 — Feature Store : préparer les données pour le ML](#session-2--feature-store--préparer-les-données-pour-le-ml)
 6. [Session 3 — ML Pipeline : entraîner et sauvegarder un modèle](#session-3--ml-pipeline--entraîner-et-sauvegarder-un-modèle)
 7. [Session 4 — FastAPI : exposer le modèle via une API](#session-4--fastapi--exposer-le-modèle-via-une-api)
-8. [Installation et lancement](#installation-et-lancement)
-9. [Structure des fichiers](#structure-des-fichiers)
+8. [Session 5 — Monitoring : surveillance du drift](#session-5--monitoring--surveillance-du-drift)
+9. [Session 6 — LLM Layer : insights IA avec Claude](#session-6--llm-layer--insights-ia-avec-claude)
+10. [Installation et lancement](#installation-et-lancement)
+11. [Structure des fichiers](#structure-des-fichiers)
 
 ---
 
@@ -27,6 +29,7 @@ DataPulse simule ce que font les équipes Data/ML dans une vraie entreprise fint
 3. Un **modèle ML prédit** si le prix va monter ou baisser
 4. Une **API** répond à ces prédictions en quelques millisecondes
 5. On **surveille** que le modèle ne se dégrade pas dans le temps
+6. Un **LLM (Claude)** analyse les alertes et génère des recommandations en langage naturel
 
 ---
 
@@ -178,6 +181,15 @@ Prix réels/simulés
 │  POST /predict → UP ou DOWN          │
 │  GET  /ab-test → prod vs staging     │
 └───────────────────────────────────────┘
+                                │
+                    ┌───────────┴────────────┐
+                    ▼                        ▼
+┌───────────────────────────┐  ┌────────────────────────────┐
+│   Monitoring (Session 5)  │  │   LLM Layer (Session 6)    │
+│  Evidently drift detect   │  │  RAG → alerts.jsonl        │
+│  alerts.jsonl             │→ │  Claude API (streaming)    │
+│  HTML reports             │  │  GET /insights/AAPL        │
+└───────────────────────────┘  └────────────────────────────┘
 ```
 
 ---
@@ -349,6 +361,199 @@ Le **lifespan** FastAPI : fonction spéciale qui s'exécute au démarrage et à 
 
 ---
 
+## Session 5 — Monitoring : surveillance du drift
+
+**Objectif :** détecter automatiquement quand les données de production s'éloignent des données d'entraînement.
+
+### Pourquoi surveiller le drift ?
+
+Imagine que ton modèle ML a appris sur des données de marché "normal". Puis une crise économique arrive : les prix bougent différemment, la volatilité explose. Ton modèle ne sait pas que les règles ont changé → ses prédictions deviennent mauvaises.
+
+Le **data drift** (dérive des données) détecte exactement ce phénomène statistiquement.
+
+### Concepts clés
+
+| Terme | Explication |
+|-------|-------------|
+| **Distribution** | La façon dont les valeurs se répartissent. Ex : "volatility_20 tourne d'habitude autour de 1.5 ± 0.3" |
+| **Drift** | La distribution a changé. Ex : volatility_20 est maintenant à 4.5 en moyenne |
+| **KS Test** | Test statistique qui compare deux distributions et calcule si elles viennent de la même "population" |
+| **Drift share** | % de features qui ont drifté. 75% = 3 features sur 4 ont changé |
+| **Reference data** | Données d'entraînement = la référence "normale" |
+| **Current data** | Données récentes de production = ce qu'on observe maintenant |
+
+### Niveaux d'alerte
+
+```
+OK       → 0% de drift       → Modèle stable, aucune action
+WARNING  → drift < 50%       → Quelques features ont changé, surveiller
+CRITICAL → drift ≥ 50%       → Majorité des features impactées, réentraîner
+```
+
+### Comment ça marche (Evidently)
+
+Evidently est une bibliothèque Python spécialisée dans la surveillance de modèles ML. Elle calcule automatiquement des tests statistiques sur chaque feature.
+
+```python
+# On lui donne deux DataFrames : référence et courant
+report = Report(metrics=[DatasetDriftMetric(), DataDriftTable()])
+report.run(reference_data=df_reference, current_data=df_current)
+# → Evidently calcule le test de Kolmogorov-Smirnov sur chaque feature
+# → Génère un rapport HTML interactif
+```
+
+### Lancer le monitoring
+
+```bash
+# Simulation d'un drift (pour tester)
+python monitoring/run.py --simulate-drift
+
+# Analyser un symbole spécifique
+python monitoring/run.py --symbol AAPL
+
+# Les rapports sont sauvegardés dans monitoring/reports/
+```
+
+---
+
+## Session 6 — LLM Layer : insights IA avec Claude
+
+**Objectif :** utiliser un LLM (Large Language Model) pour analyser les alertes de drift et générer des recommandations en langage naturel.
+
+### Qu'est-ce qu'un LLM ?
+
+Un **LLM (Large Language Model)** est un modèle d'IA entraîné sur des milliards de textes. Il comprend et génère du langage naturel.
+
+- **GPT-4** (OpenAI), **Claude** (Anthropic), **Gemini** (Google) sont des LLMs
+- Dans DataPulse, on utilise **Claude Opus 4.6** d'Anthropic
+- Au lieu de "apprendre" sur nos données, on lui donne nos données directement dans le prompt
+
+### RAG — Retrieval-Augmented Generation
+
+**RAG = Génération Augmentée par Récupération**
+
+C'est une technique qui combine deux choses :
+1. **Retrieval** (récupération) : on cherche les données pertinentes dans notre base
+2. **Generation** (génération) : on les injecte dans le prompt pour que le LLM réponde avec ces données
+
+```
+Nos alertes JSONL          Prompt Claude
+[alerte 1]  ──────────→  "Voici les 7 dernières alertes
+[alerte 2]                 pour AAPL : [contenu]
+[alerte 3]                 Analyse-les et donne des recommandations"
+   ...
+```
+
+**Sans RAG :** Claude ne connaît pas nos données (il a une date de coupure de connaissance)
+**Avec RAG :** On lui donne nos données en temps réel → il peut répondre dessus
+
+### Prompt Caching
+
+Le **prompt caching** est une optimisation économique :
+
+- Le system prompt (instructions générales) est **stable** → Anthropic le met en cache 5 minutes
+- Les appels répétés ne re-envoient pas ce texte → **~90% d'économie de tokens** sur le system prompt
+- Seul le contenu variable (les alertes du jour) est envoyé à chaque fois
+
+```python
+system=[{
+    "type": "text",
+    "text": SYSTEM_PROMPT,  # ~500 tokens, stable
+    "cache_control": {"type": "ephemeral"}  # mis en cache 5 min
+}]
+```
+
+### Adaptive Thinking
+
+Claude Opus 4.6 supporte le **thinking adaptatif** :
+
+- Claude "réfléchit" silencieusement avant de répondre (comme un brouillon interne)
+- Il décide lui-même combien réfléchir selon la complexité de la question
+- Résultat : réponses plus précises et mieux raisonnées
+
+```python
+thinking={"type": "adaptive"}  # Claude décide lui-même de la profondeur
+```
+
+### Streaming
+
+Au lieu d'attendre que Claude finisse sa réponse complète (qui peut prendre 10-30 secondes), le **streaming** envoie les tokens au fur et à mesure :
+
+```
+Sans streaming : ⏳⏳⏳⏳⏳⏳⏳⏳ → Réponse complète en 15s
+Avec streaming : "L'analyse" → " montre" → " un drift" → " critique"... (token par token)
+```
+
+C'est comme lire une réponse qui s'écrit devant toi en temps réel.
+
+### Architecture du module LLM
+
+```
+llm/
+├── config.py      → modèle Claude, clé API, paramètres
+├── rag.py         → charge les alertes JSONL, formate le contexte
+├── analyzer.py    → appelle Claude API avec streaming + caching
+└── insights.py    → CLI pour lancer l'analyse
+```
+
+### Utilisation
+
+**Prérequis : avoir une clé API Anthropic**
+```bash
+export ANTHROPIC_API_KEY='sk-ant-api03-...'
+```
+
+**CLI (terminal) :**
+```bash
+# Analyse toutes les actions (streaming)
+python llm/insights.py
+
+# Analyse un symbole spécifique
+python llm/insights.py --symbol AAPL
+
+# Sans streaming (attend la réponse complète)
+python llm/insights.py --symbol AAPL --no-stream
+```
+
+**Via l'API FastAPI :**
+```bash
+# Lancer l'API
+uvicorn api.main:app --reload
+
+# Appeler l'endpoint insights
+curl http://localhost:8000/insights/AAPL
+```
+
+**Exemple de réponse Claude :**
+```
+Résumé de la situation :
+• AAPL a connu 3 événements de drift critique au cours des dernières analyses
+• 100% des features (sma_5, sma_20, volatility_20, price_change_pct) ont drifté
+• Cela indique un changement de régime de marché significatif
+
+Features les plus à risque :
+• volatility_20 : fortement impactée → le marché est plus volatile qu'à l'entraînement
+• price_change_pct : distribution très différente → les variations journalières ont changé
+
+Évaluation du risque ML :
+• ÉLEVÉ — les prédictions UP/DOWN ne sont plus fiables dans ce contexte
+• Le modèle a été entraîné sur un régime de marché différent
+
+Recommandations :
+• Réentraîner immédiatement le modèle avec des données récentes (post-changement)
+• Augmenter la fréquence de surveillance à 1h au lieu de 24h
+• Envisager un modèle adaptatif qui se réentraîne automatiquement
+```
+
+### Nouveaux endpoints API
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /insights/AAPL` | Analyse IA pour un symbole spécifique |
+| `GET /insights` | Analyse IA globale (tous les symboles) |
+
+---
+
 ## Installation et lancement
 
 ### Prérequis
@@ -445,9 +650,23 @@ datapulse/
 │   └── registry.py          # Promotion staging/production
 │
 ├── api/                     # Session 4 — API FastAPI
-│   ├── schemas.py           # Structures de requêtes/réponses
+│   ├── schemas.py           # Structures de requêtes/réponses (+ InsightResponse)
 │   ├── predictor.py         # Chargement modèle + prédiction
-│   └── main.py              # Endpoints HTTP
+│   └── main.py              # Endpoints HTTP (+ /insights)
+│
+├── monitoring/              # Session 5 — Monitoring drift
+│   ├── config.py            # Config Evidently + seuils
+│   ├── drift_detector.py    # Détection drift (Evidently)
+│   ├── alerts.py            # Système d'alertes JSONL
+│   ├── reporter.py          # Rapports HTML + JSON
+│   ├── run.py               # CLI monitoring
+│   └── reports/             # Rapports générés (HTML + JSON + alerts.jsonl)
+│
+├── llm/                     # Session 6 — LLM Layer (Claude API)
+│   ├── config.py            # Config modèle + clé API
+│   ├── rag.py               # Récupération alertes (RAG)
+│   ├── analyzer.py          # Appel Claude avec streaming + caching
+│   └── insights.py          # CLI insights IA
 │
 ├── data/
 │   └── raw/                 # Ticks bruts JSONL (généré automatiquement)
