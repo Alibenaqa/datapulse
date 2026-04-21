@@ -4,12 +4,14 @@ Configuration du module LLM (Claude API).
 """
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()  # charge automatiquement le fichier .env à la racine
 
 # Modèle Claude à utiliser
 ANTHROPIC_MODEL = "claude-opus-4-6"
 
-# Clé API — à définir dans la variable d'environnement ANTHROPIC_API_KEY
-# (ou dans un fichier .env à la racine du projet)
+# Clé API — lue depuis .env ou variable d'environnement ANTHROPIC_API_KEY
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # Chemin vers le fichier d'alertes généré par le monitoring
