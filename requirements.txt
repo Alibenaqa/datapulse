@@ -21,3 +21,6 @@ evidently==0.4.30
 
 # Session 6 — LLM layer
 anthropic>=0.40.0
+
+# Dashboard
+streamlit>=1.35.0
